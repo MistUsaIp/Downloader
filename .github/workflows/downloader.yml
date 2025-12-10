@@ -1,0 +1,47 @@
+name: Download HLS to Drive
+on:
+  workflow_dispatch:
+    inputs:
+      video_url:
+        description: 'M3U8 Link'
+        required: true
+      filename:
+        description: 'Output Name (e.g. video.mp4)'
+        required: true
+        default: 'video.mp4'
+      proxy_url:
+        description: 'Iran Proxy (Optional: http://IP:PORT)'
+        required: false
+
+jobs:
+  download-job:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install Tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          pip install yt-dlp
+          sudo -v ; curl https://rclone.org/install.sh | sudo bash
+
+      - name: Configure Rclone
+        env:
+          RCLONE_CONF_CX: ${{ secrets.RCLONE_CONF }}
+        run: |
+          mkdir -p ~/.config/rclone
+          echo "$RCLONE_CONF_CX" > ~/.config/rclone/rclone.conf
+
+      - name: Download Video
+        run: |
+          if [ -z "${{ inputs.proxy_url }}" ]; then
+            echo "Direct Download..."
+            yt-dlp "${{ inputs.video_url }}" -o "${{ inputs.filename }}" --merge-output-format mp4
+          else
+            echo "Proxy Download..."
+            yt-dlp "${{ inputs.video_url }}" --proxy "${{ inputs.proxy_url }}" -o "${{ inputs.filename }}" --merge-output-format mp4
+          fi
+
+      - name: Upload to Drive
+        run: |
+          # gdrive نامی است که در تنظیمات rclone انتخاب کردید
+          rclone copy "${{ inputs.filename }}" gdrive:/Downloads/ -v
