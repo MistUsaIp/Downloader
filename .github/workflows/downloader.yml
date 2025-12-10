@@ -1,4 +1,4 @@
-name: Download HLS to Drive
+name: Download HLS with JWT
 on:
   workflow_dispatch:
     inputs:
@@ -6,11 +6,11 @@ on:
         description: 'M3U8 Link'
         required: true
       filename:
-        description: 'Output Name (e.g. video.mp4)'
+        description: 'Output Name'
         required: true
         default: 'video.mp4'
       proxy_url:
-        description: 'Iran Proxy (Optional: http://IP:PORT)'
+        description: 'Proxy (Optional)'
         required: false
 
 jobs:
@@ -32,16 +32,35 @@ jobs:
           echo "$RCLONE_CONF_CX" > ~/.config/rclone/rclone.conf
 
       - name: Download Video
+        env:
+          # توکن را از سکرت می‌خوانیم و در متغیر محیطی می‌ریزیم
+          MY_TOKEN: ${{ secrets.JWT_TOKEN }}
         run: |
+          # هدر احراز هویت را می‌سازیم
+          AUTH_HEADER="Authorization: Bearer $MY_TOKEN"
+          UA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+          
+          echo "Starting download..."
+          
           if [ -z "${{ inputs.proxy_url }}" ]; then
-            echo "Direct Download..."
-            yt-dlp "${{ inputs.video_url }}" -o "${{ inputs.filename }}" --merge-output-format mp4
+            # دانلود مستقیم با توکن
+            yt-dlp "${{ inputs.video_url }}" \
+              --add-header "$AUTH_HEADER" \
+              --user-agent "$UA" \
+              --referer "${{ inputs.video_url }}" \
+              -o "${{ inputs.filename }}" \
+              --merge-output-format mp4
           else
-            echo "Proxy Download..."
-            yt-dlp "${{ inputs.video_url }}" --proxy "${{ inputs.proxy_url }}" -o "${{ inputs.filename }}" --merge-output-format mp4
+            # دانلود با پروکسی و توکن
+            yt-dlp "${{ inputs.video_url }}" \
+              --proxy "${{ inputs.proxy_url }}" \
+              --add-header "$AUTH_HEADER" \
+              --user-agent "$UA" \
+              --referer "${{ inputs.video_url }}" \
+              -o "${{ inputs.filename }}" \
+              --merge-output-format mp4
           fi
 
       - name: Upload to Drive
         run: |
-          # gdrive نامی است که در تنظیمات rclone انتخاب کردید
           rclone copy "${{ inputs.filename }}" gdrive:/Downloads/ -v
